@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onliattend</title>
+  <meta name="description" content="Intelligent Chrome Web App for online face recognition attendance tracking, enrollment, and presence vs absence analytics.">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f1e50">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=3">
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon.png?v=3">
+  <link rel="shortcut icon" href="./favicon.ico?v=3">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png?v=3">
+
+  <!-- Core Styles -->
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+  <!-- Top App Navigation Bar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-wrapper">
+        <img src="./icons/logo.png?v=2" alt="Onliattend logo" class="brand-logo" id="appLogoImg" style="background:#ffffff; padding:2px;">
+        <div class="brand-text">
+          <h1>Onliattend <span class="brand-badge">NTCC Project</span></h1>
+          <div class="brand-subtitle">Smart Biometric Face Attendance</div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" aria-label="Main Navigation">
+        <button class="nav-tab-btn nav-item-active" data-tab-target="scan" id="tabBtnScan">
+          <span>📷</span> Scan Attendance
+        </button>
+        <button class="nav-tab-btn" data-tab-target="students" id="tabBtnStudents">
+          <span>👥</span> Students (Face ID)
+        </button>
+        <button class="nav-tab-btn" data-tab-target="analytics" id="tabBtnAnalytics">
+          <span>📊</span> Analytics & Charts
+        </button>
+        <button class="nav-tab-btn" data-tab-target="daily" id="tabBtnDaily">
+          <span>📋</span> Daily Sheet
+        </button>
+        <button class="nav-tab-btn" data-tab-target="settings" id="tabBtnSettings">
+          <span>⚙️</span> Settings
+        </button>
+      </nav>
+
+      <!-- Header Quick Actions & Status -->
+      <div class="header-actions">
+        <span class="status-pill" id="cameraStatusPill">Camera Standby</span>
+        <button class="btn btn-secondary btn-sm hidden" id="pwaInstallBtn" title="Install OnliAttend Chrome Web App">
+          <span>📥</span> Install App
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Body -->
+  <main class="app-main">
+
+    <!-- ==========================================
+         SECTION 1: SCAN ATTENDANCE (LIVE CAMERA)
+         ========================================== -->
+    <section id="section-scan" class="app-section">
+      <div class="grid-2">
+        
+        <!-- Live Camera Viewfinder Column -->
+        <div class="card">
+          <div class="card-title">
+            <span>📷 Live Camera Face Scanner</span>
+            <div id="modelLoadingBadge" class="badge badge-neutral text-xs hidden">
+              ⏳ Initializing AI...
+            </div>
+          </div>
+          <div class="card-subtitle">
+            Look directly into the camera. Attendance is automatically marked when your face matches your registered Face ID.
+          </div>
+
+          <!-- Futuristic Viewfinder HUD -->
+          <div class="camera-viewfinder-wrapper" id="cameraWrapper">
+            <video id="scannerVideo" class="camera-video" playsinline muted></video>
+            <canvas id="scannerCanvas" class="camera-canvas"></canvas>
+
+            <!-- Scanning Reticles & Laser -->
+            <div class="viewfinder-laser"></div>
+            <div class="viewfinder-corner corner-tl"></div>
+            <div class="viewfinder-corner corner-tr"></div>
+            <div class="viewfinder-corner corner-bl"></div>
+            <div class="viewfinder-corner corner-br"></div>
+
+            <div class="viewfinder-status-overlay" id="scannerModelStatus">
+              Click "Start Camera" to begin attendance scanning
+            </div>
+
+            <!-- Slide-in Scan Match Result Banner -->
+            <div id="scanResultBanner" class="hidden"></div>
+          </div>
+
+          <!-- Camera Controls Toolbar -->
+          <div class="card-footer mt-4" style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn btn-primary" id="btnToggleCamera">
+                <span>▶ Start Camera</span>
+              </button>
+              <select id="cameraDeviceSelect" class="input-control" style="width: 200px; padding: 8px 12px; font-size: 0.8rem;">
+                <option value="">Default Webcam</option>
+              </select>
+            </div>
+            <div class="text-xs text-muted">
+              Auto-records timestamp & prevents duplicate marking
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Scans & Stats Sidebar -->
+        <div class="card">
+          <div class="card-title">
+            <span>⚡ Today's Live Attendance</span>
+            <span class="badge badge-success" id="todayPresentCount">0</span>
+          </div>
+          <div class="card-subtitle">
+            Students recognized and marked present today
+          </div>
+
+          <div class="recent-scans-list" id="recentScansList">
+            <div class="empty-state text-muted py-8 text-center">
+              No attendance marked yet today. Start camera to scan faces.
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4" style="border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <button class="btn btn-secondary btn-sm" onclick="window.oniApp.switchTab('daily')">
+              Open Daily Register →
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="window.oniApp.switchTab('analytics')">
+              View Analytics →
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SECTION 2: STUDENTS (FACE ID ENROLLMENT)
+         ========================================== -->
+    <section id="section-students" class="app-section hidden">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <h2 class="card-title">👥 Student Directory & Face ID Enrollment</h2>
+            <div class="card-subtitle" style="margin-bottom: 0;">
+              Save student profile and register their biometric facial signature for automated attendance.
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <span class="badge badge-neutral" id="enrolledStudentsCount">0 Enrolled</span>
+            <button class="btn btn-primary" id="btnOpenEnrollModal">
+              <span>➕ Enroll New Student</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div style="margin-bottom: 24px;">
+          <input type="text" id="studentSearchInput" class="input-control" placeholder="🔍 Search students by name, roll number, or department..." style="max-width: 440px;">
+        </div>
+
+        <!-- Students Cards Grid -->
+        <div class="grid-students" id="studentsGrid">
+          <!-- Populated dynamically by app.js -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SECTION 3: ANALYTICS & CHARTS (CALENDAR OPTION)
+         ========================================== -->
+    <section id="section-analytics" class="app-section hidden">
+      
+      <!-- Calendar Starting Day Filter Bar -->
+      <div class="card" style="margin-bottom: 24px; background: linear-gradient(135deg, rgba(17, 24, 39, 0.85), rgba(30, 41, 59, 0.6));">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+          <div>
+            <h2 class="card-title" style="margin-bottom: 4px;">📅 Attendance Calendar & Session Timeline</h2>
+            <div class="text-sm text-muted">
+              Select the <strong class="text-white">Starting Day of Attendance</strong> to calculate presence and absence trends over that period.
+            </div>
+          </div>
+
+          <!-- Calendar Controls -->
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label for="calendarStartingDate" class="text-xs font-semibold text-muted">START DATE:</label>
+              <input type="date" id="calendarStartingDate" class="input-control" style="width: auto; padding: 7px 12px; font-weight: 600;">
+            </div>
+            <button class="btn btn-primary btn-sm" id="btnApplyCalendarDate">
+              <span>Apply Date Filter</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btnExportCsv" title="Export CSV for NTCC project submission">
+              <span>📥 Export CSV</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Period Preset Chips -->
+        <div class="chip-container">
+          <span class="text-xs text-muted" style="align-self: center; margin-right: 4px;">Quick Presets:</span>
+          <button class="btn-chip" data-preset-days="7">Last 7 Days</button>
+          <button class="btn-chip btn-chip-active" data-preset-days="14">Last 14 Days</button>
+          <button class="btn-chip" data-preset-days="21">Last 21 Days (3 Weeks)</button>
+          <button class="btn-chip" data-preset-days="30">Last 30 Days (1 Month)</button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Metric Cards -->
+      <div class="grid-4" style="margin-bottom: 24px;">
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>Overall Attendance Rate</span>
+            <span>📈</span>
+          </div>
+          <div class="kpi-value text-emerald" id="kpiAttendanceRate">0%</div>
+          <div class="kpi-sub" id="kpiDateRangeLabel">Since chosen starting date</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>Total Working Days</span>
+            <span>🗓️</span>
+          </div>
+          <div class="kpi-value" id="kpiWorkingDays">0</div>
+          <div class="kpi-sub">Excluding non-working days</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>Enrolled Students</span>
+            <span>🎓</span>
+          </div>
+          <div class="kpi-value" id="kpiTotalStudents">0</div>
+          <div class="kpi-sub">Active biometric profiles</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>Shortage Warning (&lt;75%)</span>
+            <span>⚠️</span>
+          </div>
+          <div class="kpi-value text-rose" id="kpiAtRisk">0</div>
+          <div class="kpi-sub">Students below university criteria</div>
+        </div>
+      </div>
+
+      <!-- Interactive Charts Row -->
+      <div class="grid-2" style="margin-bottom: 24px;">
+        
+        <!-- Chart 1: Presence vs Absence Daily Trend -->
+        <div class="card">
+          <div class="card-title">
+            <span>📊 Daily Presence vs Absence Trend</span>
+          </div>
+          <div class="card-subtitle">
+            Stacked volume of present (emerald) vs absent (rose) students for each working day
+          </div>
+          <div style="position: relative; height: 300px; width: 100%;">
+            <canvas id="trendChartCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 3: Donut Proportion & Stats -->
+        <div class="card">
+          <div class="card-title">
+            <span>🎯 Overall Attendance Ratio</span>
+          </div>
+          <div class="card-subtitle">
+            Proportion of present vs absent attendances across the session
+          </div>
+          <div class="donut-wrapper">
+            <canvas id="donutChartCanvas"></canvas>
+            <div class="donut-center">
+              <div class="donut-center-rate" id="donutCenterRate">0%</div>
+              <div class="donut-center-label">Present</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Chart 2: Student-wise Comparison Bar Chart -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-title">
+          <span>🏅 Student-by-Student Attendance Comparison (%)</span>
+        </div>
+        <div class="card-subtitle">
+          Individual attendance percentage since the calendar starting date. Green indicates ≥75% eligibility.
+        </div>
+        <div style="position: relative; height: 260px; width: 100%;">
+          <canvas id="studentChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Detailed Breakdown Table -->
+      <div class="card">
+        <div class="card-title">
+          <span>📋 Student Eligibility & Attendance Breakdown</span>
+        </div>
+        <div class="card-subtitle">
+          Complete performance audit for the selected timeframe
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Department</th>
+                <th>Days Present</th>
+                <th>Days Absent</th>
+                <th>Attendance %</th>
+                <th>Eligibility</th>
+              </tr>
+            </thead>
+            <tbody id="studentAnalyticsTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==========================================
+         SECTION 4: DAILY SHEET (ATTENDANCE REGISTER)
+         ========================================== -->
+    <section id="section-daily" class="app-section hidden">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <h2 class="card-title">📋 Daily Attendance Register</h2>
+            <div class="card-subtitle" style="margin-bottom: 0;">
+              Inspect daily logs, check-in timestamps, or manually adjust student status.
+            </div>
+          </div>
+
+          <!-- Date Navigation Bar -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="btnPrevDay" title="Previous Day">◀ Previous</button>
+            <input type="date" id="dailySheetDate" class="input-control" style="width: auto; padding: 7px 12px; font-weight: 600;">
+            <button class="btn btn-secondary btn-sm" id="btnNextDay" title="Next Day">Next ▶</button>
+          </div>
+        </div>
+
+        <!-- Quick Day Actions -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+          <button class="btn btn-secondary btn-sm" id="btnMarkAllPresent">
+            <span>✓ Mark All Present</span>
+          </button>
+          <button class="btn btn-outline-danger btn-sm" id="btnClearDay">
+            <span>✗ Clear Day</span>
+          </button>
+        </div>
+
+        <!-- Daily Register Table -->
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Department</th>
+                <th>Time In</th>
+                <th>Verification Method</th>
+                <th>Status (Click to Toggle)</th>
+              </tr>
+            </thead>
+            <tbody id="dailySheetTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SECTION 5: SETTINGS & DEMO DATA
+         ========================================== -->
+    <section id="section-settings" class="app-section hidden">
+      <div class="grid-2">
+        
+        <!-- NTCC Demo Data Setup Card -->
+        <div class="card">
+          <div class="card-title">
+            <span>⚡ NTCC Project Demo Data Generator</span>
+          </div>
+          <div class="card-subtitle">
+            Quickly populate realistic sample students and 3 weeks of attendance logs so you can present rich charts and reports to your evaluator immediately.
+          </div>
+
+          <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px;">
+            <div class="font-semibold text-white mb-1">💡 What does this do?</div>
+            <div class="text-sm text-muted">
+              Creates 6 enrolled sample engineering students with Face IDs and generates 21 days of daily attendance history with realistic variations (including students with &gt;75% and &lt;75% attendance to test warning alerts).
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px; flex-direction: column;">
+            <button class="btn btn-primary" id="btnSeedDemoData">
+              <span>⚡ Load Demo Students & 3-Week Attendance Data</span>
+            </button>
+            <button class="btn btn-outline-danger" id="btnClearAllData">
+              <span>🗑️ Clear / Reset All Data</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Biometric Recognition Parameters -->
+        <div class="card">
+          <div class="card-title">
+            <span>⚙️ Biometric Sensitivity Settings</span>
+          </div>
+          <div class="card-subtitle">
+            Fine-tune facial recognition confidence thresholds
+          </div>
+
+          <div class="input-group">
+            <label class="input-label" for="matchThresholdSlider">
+              Face Match Distance Threshold: <strong id="matchThresholdVal" class="text-white">0.52</strong>
+            </label>
+            <input type="range" id="matchThresholdSlider" min="0.38" max="0.65" step="0.01" value="0.52" style="width: 100%;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-sub); margin-top: 4px;">
+              <span>0.38 (Strict / Lower False Positive)</span>
+              <span>0.65 (Lenient)</span>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4" style="border-top: 1px solid var(--border-color);">
+            <div class="font-semibold text-white">About OnliAttend</div>
+            <div class="text-xs text-muted mt-1 leading-relaxed">
+              Developed as an NTCC (Non-Teaching Credit Course) Project. Fully client-side biometric facial recognition using deep convolutional neural networks (face-api.js on TensorFlow.js). No external face data is uploaded, ensuring 100% student biometric privacy.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================
+       MODAL: ENROLL STUDENT WITH FACE ID
+       ========================================== -->
+  <div class="modal-overlay hidden" id="enrollStudentModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="font-bold text-white text-lg">👤 Enroll New Student (Face ID)</h3>
+        <button class="btn-icon" id="btnCloseEnrollModal">✕</button>
+      </div>
+
+      <form id="enrollStudentForm">
+        <div class="modal-body">
+          <div class="grid-2" style="gap: 20px;">
+            
+            <!-- Left: Student Details -->
+            <div>
+              <div class="input-group">
+                <label class="input-label" for="enrollStudentId">Student ID / Roll No *</label>
+                <input type="text" id="enrollStudentId" class="input-control" placeholder="e.g. NTCC202601" required>
+              </div>
+
+              <div class="input-group">
+                <label class="input-label" for="enrollStudentName">Full Student Name *</label>
+                <input type="text" id="enrollStudentName" class="input-control" placeholder="e.g. John Doe" required>
+              </div>
+
+              <div class="input-group">
+                <label class="input-label" for="enrollDepartment">Department / Class</label>
+                <input type="text" id="enrollDepartment" class="input-control" placeholder="e.g. B.Tech CSE - 7th Sem">
+              </div>
+
+              <div class="input-group">
+                <label class="input-label" for="enrollEmail">Email Address (Optional)</label>
+                <input type="email" id="enrollEmail" class="input-control" placeholder="student@university.edu">
+              </div>
+            </div>
+
+            <!-- Right: Face Capture & Biometric Enrollment -->
+            <div>
+              <label class="input-label">Face Biometric Capture *</label>
+              
+              <!-- Mini Webcam Preview -->
+              <div style="position: relative; width: 100%; height: 180px; background: #020617; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center;">
+                <video id="enrollVideo" playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+                <div class="viewfinder-corner corner-tl"></div>
+                <div class="viewfinder-corner corner-tr"></div>
+                <div class="viewfinder-corner corner-bl"></div>
+                <div class="viewfinder-corner corner-br"></div>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnCaptureFace" style="flex: 1;">
+                  <span>📸 Capture Face</span>
+                </button>
+              </div>
+
+              <!-- Or Upload Photo Option -->
+              <div class="mt-2 text-xs text-muted text-center">— OR UPLOAD PHOTO —</div>
+              <input type="file" id="enrollPhotoInput" accept="image/*" class="input-control mt-1" style="font-size: 0.75rem; padding: 6px;">
+
+              <!-- Face Status & Preview -->
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px; background: rgba(255, 255, 255, 0.03); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <img id="enrollFacePreview" src="./icons/icon-192.png" alt="Face preview" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color);">
+                <div id="enrollFaceStatus" class="text-xs" style="flex: 1;">
+                  <span class="text-muted">Align face inside camera and click "Capture Face"</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('btnCloseEnrollModal').click()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSaveStudentSubmit">
+            <span>✓ Save Student & Face ID</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: WELCOME & QUICK START GUIDE
+       ========================================== -->
+  <div class="modal-overlay hidden" id="welcomeGuideModal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="font-bold text-white text-lg">👋 Welcome to OnliAttend</h3>
+        <button class="btn-icon" id="btnCloseWelcomeGuide">✕</button>
+      </div>
+      <div class="modal-body text-center py-8">
+        <img src="./icons/logo.jpg" alt="Logo" style="width: 72px; height: 72px; border-radius: var(--radius-lg); margin-bottom: 16px; border: 1px solid var(--accent-cyan);">
+        <h3 class="text-xl font-bold text-white">Smart Biometric Attendance</h3>
+        <p class="text-sm text-muted mt-2" style="max-width: 400px; margin-left: auto; margin-right: auto;">
+          Ready to track attendance with camera face recognition, enrollment, and presence vs absence charts since any calendar starting date!
+        </p>
+
+        <div class="mt-6" style="display: flex; flex-direction: column; gap: 10px;">
+          <button class="btn btn-primary" id="btnWelcomeSeedDemo">
+            <span>⚡ Load Demo Data (Recommended for NTCC Presentation)</span>
+          </button>
+          <button class="btn btn-secondary" onclick="document.getElementById('btnCloseWelcomeGuide').click()">
+            <span>I'll Enroll Students Manually</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Third-party Vendor Libraries -->
+  <script src="./vendor/chart.umd.min.js"></script>
+  <script src="./vendor/face-api.min.js"></script>
+
+  <!-- Application Logic Modules -->
+  <script src="./js/storage.js"></script>
+  <script src="./js/face-service.js"></script>
+  <script src="./js/charts.js"></script>
+  <script src="./js/app.js"></script>
+
+</body>
+</html>
